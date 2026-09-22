@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "build", "type": "process", "command": "dotnet", "args": ["build", "GrandmaMeijin.csproj"], "problemMatcher": "$msCompile", "group": { "kind": "build", "isDefault": true } },
+    { "label": "run", "type": "process", "command": "dotnet", "args": ["run", "--project", "GrandmaMeijin.csproj"], "problemMatcher": "$msCompile" },
+    { "label": "publish", "type": "process", "command": "dotnet", "args": ["publish", "GrandmaMeijin.csproj", "-c", "Release", "-p:PublishProfile=WinX64"], "problemMatcher": "$msCompile" }
+  ]
+}

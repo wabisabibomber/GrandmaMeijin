@@ -1,0 +1,6 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    { "name": "GrandmaMeijin", "type": "coreclr", "request": "launch", "preLaunchTask": "build", "program": "${workspaceFolder}/bin/Debug/net10.0-windows/GrandmaMeijin.dll", "cwd": "${workspaceFolder}", "console": "internalConsole" }
+  ]
+}
