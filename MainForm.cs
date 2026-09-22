@@ -22,6 +22,15 @@ internal sealed class MainForm : Form
     internal MainForm()
     {
         Text = "GrandmaMeijin";
+        // 単一exeでもフォーム・タスクバーに同じアイコンを表示できるよう埋め込む。
+        using (var iconStream = typeof(MainForm).Assembly.GetManifestResourceStream("GrandmaMeijin.AppIcon"))
+        {
+            if (iconStream is not null)
+            {
+                using var sourceIcon = new Icon(iconStream);
+                Icon = (Icon)sourceIcon.Clone();
+            }
+        }
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(440, 340);
         FormBorderStyle = FormBorderStyle.FixedSingle;
