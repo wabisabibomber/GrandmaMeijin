@@ -5,12 +5,13 @@ namespace GrandmaMeijin;
 internal sealed class MainForm : Form
 {
     private readonly ClickController controller = new();
-    private readonly NumericUpDown period = new() { Minimum = 20, Maximum = 60000, Value = 100, Width = 110 };
+    private readonly NumericUpDown period = new() { Minimum = 20, Maximum = 60000, Value = 60, Width = 110 };
     private readonly NumericUpDown duty = new() { Minimum = 1, Maximum = 99, Value = 50, Width = 110 };
     private readonly Label timing = new() { AutoSize = true };
     private readonly Label status = new() { Text = "STOPPED", AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
     private readonly Label hotkeyLabel = new() { AutoSize = true };
     private readonly Label notice = new() { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = Color.Firebrick };
+    private readonly Label saveNotice = new() { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = Color.Firebrick };
     private readonly Button toggle = new() { Text = "開始", Width = 130, Height = 36 };
     private readonly Button change = new() { Text = "変更…", AutoSize = true };
     private HotkeySettings hotkey = HotkeySettings.Load();
@@ -47,8 +48,13 @@ internal sealed class MainForm : Form
         layout.Controls.Add(Row(hotkeyLabel, change));
         layout.Controls.Add(new Label { Text = "現在のマウスポインター位置で左クリックします。", AutoSize = true });
         layout.Controls.Add(notice);
-        period.ValueChanged += (_, _) => UpdateTiming();
-        duty.ValueChanged += (_, _) => UpdateTiming();
+        layout.Controls.Add(saveNotice);
+        var saved = ClickSettings.Load();
+        period.Value = saved.PeriodMs;
+        duty.Value = saved.DutyPercent;
+        // 復元完了後にイベントを接続し、周期とデューティー比の変更を自動保存する。
+        period.ValueChanged += (_, _) => { UpdateTiming(); SaveClickSettings(); };
+        duty.ValueChanged += (_, _) => { UpdateTiming(); SaveClickSettings(); };
         toggle.Click += (_, _) => Toggle();
         change.Click += (_, _) => ChangeHotkey();
         UpdateTiming();
@@ -67,6 +73,18 @@ internal sealed class MainForm : Form
     }
 
     private void UpdateTiming() => timing.Text = $"Down {period.Value * duty.Value / 100:0.##} ms / Up {period.Value * (100 - duty.Value) / 100:0.##} ms";
+    private void SaveClickSettings()
+    {
+        try
+        {
+            new ClickSettings { PeriodMs = period.Value, DutyPercent = duty.Value }.Save();
+            saveNotice.Text = "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            saveNotice.Text = "周期・押下時間の割合を保存できませんでした：" + ex.Message;
+        }
+    }
     private void UpdateHotkeyLabel() => hotkeyLabel.Text = $"ホットキー：{hotkey}" + (registeredId == 0 ? "（未登録）" : "");
     private void SetRunning(bool running)
     {
@@ -150,6 +168,8 @@ internal sealed class MainForm : Form
     {
         closing = true;
         controller.Stop(); // ウィンドウ終了時は待機を解除し、LEFTUPまで完了させる。
+        ValidateChildren(); // 入力欄を編集中に閉じた場合も値を確定して保存する。
+        SaveClickSettings();
         base.OnFormClosing(e);
     }
     protected override void Dispose(bool disposing)
