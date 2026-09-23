@@ -6,7 +6,7 @@
       "displayName": "MSVC x64 (static runtime)",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
-      "binaryDir": "${sourceDir}/../artifacts/native-build",
+      "binaryDir": "${sourceDir}/artifacts/build",
       "cacheVariables": { "BUILD_TESTING": "ON" }
     }
   ],

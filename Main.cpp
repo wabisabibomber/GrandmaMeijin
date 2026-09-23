@@ -20,6 +20,10 @@ struct App {
     int registeredId{};
     UINT_PTR generation{};
     bool initialized{}, closing{}, editing{};
+    bool notifying{}, timingSaveFailed{}, hotkeySaveFailed{}, runErrorReported{};
+    std::function<void(HWND, const wchar_t*)> popup = [](HWND owner, const wchar_t* message) {
+        MessageBoxW(owner, message, L"GrandmaMeijin", MB_OK | MB_ICONWARNING);
+    };
     HFONT statusFont{};
     HICON largeIcon{}, smallIcon{};
     explicit App(std::filesystem::path path = SettingsDirectory(), ClickController::Sender sender = SendLeft)
@@ -31,6 +35,26 @@ struct App {
         if (smallIcon) DestroyIcon(smallIcon);
     }
     void Text(int id, const std::wstring& text) { SetDlgItemTextW(window, id, text.c_str()); }
+    void Notify(const std::wstring& message) {
+        if (message.empty() || notifying) return;
+        // 必ず停止・LEFTUPを済ませてから表示。モーダルループ中の再開も禁止する。
+        controller.Stop();
+        ++generation;
+        State();
+        notifying = true;
+        try { popup(window, message.c_str()); }
+        catch (...) { notifying = false; throw; }
+        MSG queued{};
+        while (PeekMessageW(&queued, window, WM_HOTKEY, WM_HOTKEY, PM_REMOVE)) {}
+        notifying = false;
+    }
+    void ReportRunError() {
+        const auto error = controller.Error();
+        if (!error.empty() && !runErrorReported) {
+            runErrorReported = true;
+            Notify(error);
+        }
+    }
     bool ReadValue(int id, int low, int high, int& value) {
         wchar_t text[64]{};
         GetDlgItemTextW(window, id, text, 64);
@@ -42,21 +66,38 @@ struct App {
         return true;
     }
     bool ReadClick(ClickSettings& value) { return ReadValue(IDC_PERIOD, 20, 60000, value.period) && ReadValue(IDC_DUTY, 1, 99, value.duty); }
-    void SaveTiming() {
-        if (!initialized) return;
+    bool SaveTiming(bool report = true) {
+        if (!initialized) return false;
         ClickSettings value;
         if (!ReadClick(value)) {
             Text(IDC_TIMING, L"周期20～60000、割合1～99の整数を入力してください。");
             EnableWindow(GetDlgItem(window, IDC_TOGGLE), controller.Running());
-            return; // 編集途中の空欄や不正値で、最後の正常な保存値を上書きしない。
+            return false; // 編集途中の空欄や不正値で、最後の正常な保存値を上書きしない。
         }
         click = value;
         wchar_t preview[120]{};
         swprintf_s(preview, L"Down %.2f ms / Up %.2f ms", value.period * value.duty / 100.0, value.period * (100 - value.duty) / 100.0);
         Text(IDC_TIMING, preview);
         EnableWindow(GetDlgItem(window, IDC_TOGGLE), TRUE);
-        try { SaveClick(directory, value); Text(IDC_SAVE_NOTICE, L""); }
-        catch (...) { Text(IDC_SAVE_NOTICE, L"設定を保存できませんでした。保存先の権限を確認してください。"); }
+        try { SaveClick(directory, value); timingSaveFailed = false; }
+        catch (...) {
+            // 同じ保存失敗が続く間は一度だけ通知。保存が回復したら次の失敗を通知する。
+            if (report && !timingSaveFailed) {
+                timingSaveFailed = true;
+                Notify(L"周期・押下時間の割合を保存できませんでした。保存先の権限を確認してください。\n変更は現在の起動中だけ有効です。");
+                return false; // ポップアップを閉じた直後に自動で連打を開始しない。
+            }
+        }
+        return true;
+    }
+    void SaveHotkeySetting() {
+        try { SaveHotkey(directory, hotkey); hotkeySaveFailed = false; }
+        catch (...) {
+            if (!hotkeySaveFailed) {
+                hotkeySaveFailed = true;
+                Notify(L"ホットキーは変更しましたが、保存できませんでした。\n変更は現在の起動中だけ有効です。");
+            }
+        }
     }
     void State() {
         const bool running = controller.Running();
@@ -71,7 +112,7 @@ struct App {
         const int next = registeredId == 1 ? 2 : 1;
         // RegisterHotKeyで非アクティブ時も操作。MOD_NOREPEATで長押しの反転を防ぐ。
         if (!RegisterHotKey(window, next, value.modifiers | MOD_NOREPEAT, value.key)) {
-            Text(IDC_NOTICE, L"ホットキーを登録できません（使用中・予約済みの可能性）。");
+            Notify(L"ホットキーを登録できません（使用中・予約済みの可能性）。\n別のキーを選ぶか、開始・停止ボタンを使用してください。");
             return false;
         }
         // 新しい登録に成功してから旧登録を解除する。失敗時は元の設定を維持。
@@ -81,27 +122,28 @@ struct App {
         return true;
     }
     void Toggle() {
-        if (closing || editing) return;
+        if (closing || editing || notifying) return;
         if (controller.Running()) {
             controller.Stop();
             ++generation; // 停止前の完了通知が次のループの表示を変えないようにする。
             State();
-            Text(IDC_NOTICE, controller.Error());
+            ReportRunError();
             return;
         }
         ClickSettings value;
         if (!ReadClick(value)) { SaveTiming(); return; }
-        SaveTiming();
-        Text(IDC_NOTICE, L"");
+        if (!SaveTiming()) return;
+        runErrorReported = false;
         const auto runId = ++generation;
         const HWND target = window;
         controller.Start(value.period, value.duty, [target, runId] { PostMessageW(target, FinishedMessage, runId, 0); });
         State();
     }
-    void Close() {
+    void Close(bool report = true) {
         closing = true;
         controller.Stop(); // ウィンドウ破棄前にキャンセルとLEFTUPを完了させる。
-        SaveTiming();
+        if (report) ReportRunError();
+        SaveTiming(report);
         if (registeredId) { UnregisterHotKey(window, registeredId); registeredId = 0; }
         EndDialog(window, 0);
     }
@@ -160,7 +202,7 @@ INT_PTR CALLBACK MainProc(HWND window, UINT message, WPARAM w, LPARAM l) noexcep
             if (app->smallIcon) SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(app->smallIcon));
             LOGFONTW font{};
             GetObjectW(reinterpret_cast<HFONT>(SendMessageW(window, WM_GETFONT, 0, 0)), sizeof(font), &font);
-            font.lfHeight = -MulDiv(16, static_cast<int>(dpi), 72);
+            // フォントの高さはリソースに従い、ユーザーが縮めた表示枠に収める。
             font.lfWeight = FW_BOLD;
             app->statusFont = CreateFontIndirectW(&font);
             SendDlgItemMessageW(window, IDC_STATUS, WM_SETFONT, reinterpret_cast<WPARAM>(app->statusFont), TRUE);
@@ -181,6 +223,7 @@ INT_PTR CALLBACK MainProc(HWND window, UINT message, WPARAM w, LPARAM l) noexcep
         if (!app) return FALSE;
         switch (message) {
         case WM_COMMAND:
+            if (app->notifying) return TRUE;
             if ((LOWORD(w) == IDC_PERIOD || LOWORD(w) == IDC_DUTY) && HIWORD(w) == EN_CHANGE) app->SaveTiming();
             else if (LOWORD(w) == IDC_TOGGLE && HIWORD(w) == BN_CLICKED) app->Toggle();
             else if (LOWORD(w) == IDC_CHANGE && HIWORD(w) == BN_CLICKED && !app->controller.Running()) {
@@ -190,8 +233,7 @@ INT_PTR CALLBACK MainProc(HWND window, UINT message, WPARAM w, LPARAM l) noexcep
                 app->editing = false;
                 if (result == IDOK && app->Register(value)) {
                     app->HotkeyLabel();
-                    try { SaveHotkey(app->directory, value); app->Text(IDC_NOTICE, L""); }
-                    catch (...) { app->Text(IDC_NOTICE, L"ホットキーは変更しましたが、保存できませんでした。"); }
+                    app->SaveHotkeySetting();
                 }
             }
             // Enter/Escがダイアログ既定動作で終了・開始を引き起こさないようにする。
@@ -200,11 +242,11 @@ INT_PTR CALLBACK MainProc(HWND window, UINT message, WPARAM w, LPARAM l) noexcep
             if (app->registeredId && w == static_cast<WPARAM>(app->registeredId)) app->Toggle();
             return TRUE;
         case FinishedMessage:
-            if (w == app->generation && !app->closing) { app->State(); app->Text(IDC_NOTICE, app->controller.Error()); }
+            if (w == app->generation && !app->closing) { app->State(); app->ReportRunError(); }
             return TRUE;
-        case WM_CLOSE: app->Close(); return TRUE;
-        case WM_QUERYENDSESSION: app->controller.Stop(); app->SaveTiming(); SetWindowLongPtrW(window, DWLP_MSGRESULT, TRUE); return TRUE;
-        case WM_ENDSESSION: if (w) app->Close(); return TRUE;
+        case WM_CLOSE: if (!app->notifying) app->Close(); return TRUE;
+        case WM_QUERYENDSESSION: app->controller.Stop(); app->SaveTiming(false); SetWindowLongPtrW(window, DWLP_MSGRESULT, TRUE); return TRUE;
+        case WM_ENDSESSION: if (w) app->Close(false); return TRUE;
         case WM_CTLCOLORSTATIC:
             if (reinterpret_cast<HWND>(l) == GetDlgItem(window, IDC_STATUS)) {
                 SetTextColor(reinterpret_cast<HDC>(w), app->controller.Running() ? RGB(0, 120, 45) : GetSysColor(COLOR_WINDOWTEXT));
@@ -215,7 +257,10 @@ INT_PTR CALLBACK MainProc(HWND window, UINT message, WPARAM w, LPARAM l) noexcep
         }
     } catch (...) {
         // 例外をWindowsのコールバック境界へ出さず、最優先で停止してLEFTUPを送る。
-        if (app) { app->controller.Stop(); app->Text(IDC_NOTICE, L"エラーが発生したため停止しました。"); app->State(); }
+        if (app) {
+            app->controller.Stop();
+            try { app->Notify(L"エラーが発生したため停止しました。"); } catch (...) {}
+        }
         return TRUE;
     }
     return FALSE;

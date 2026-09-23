@@ -1,12 +1,12 @@
 {
   "version": "2.0.0",
   "tasks": [
-    { "label": "native-configure", "type": "process", "command": "cmake", "args": ["--preset", "windows-x64"], "options": { "cwd": "${workspaceFolder}/native" }, "problemMatcher": "$msCompile" },
-    { "label": "native-debug", "type": "process", "command": "cmake", "args": ["--build", "--preset", "debug"], "options": { "cwd": "${workspaceFolder}/native" }, "dependsOn": "native-configure", "problemMatcher": "$msCompile", "group": { "kind": "build", "isDefault": true } },
-    { "label": "native-release", "type": "process", "command": "cmake", "args": ["--build", "--preset", "release"], "options": { "cwd": "${workspaceFolder}/native" }, "dependsOn": "native-configure", "problemMatcher": "$msCompile" },
-    { "label": "native-test", "type": "process", "command": "ctest", "args": ["--preset", "release"], "options": { "cwd": "${workspaceFolder}/native" }, "dependsOn": "native-release", "problemMatcher": [] },
-    { "label": "build", "type": "process", "command": "dotnet", "args": ["build", "GrandmaMeijin.csproj"], "problemMatcher": "$msCompile" },
-    { "label": "run", "type": "process", "command": "dotnet", "args": ["run", "--project", "GrandmaMeijin.csproj"], "problemMatcher": "$msCompile" },
-    { "label": "publish", "type": "process", "command": "dotnet", "args": ["publish", "GrandmaMeijin.csproj", "-c", "Release", "-p:PublishProfile=WinX64"], "problemMatcher": "$msCompile" }
+    { "label": "native-configure", "type": "process", "command": "cmake", "args": ["--preset", "windows-x64"], "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": "$msCompile" },
+    { "label": "native-debug", "type": "process", "command": "cmake", "args": ["--build", "--preset", "debug"], "options": { "cwd": "${workspaceFolder}" }, "dependsOn": "native-configure", "problemMatcher": "$msCompile", "group": { "kind": "build", "isDefault": true } },
+    { "label": "native-release", "type": "process", "command": "cmake", "args": ["--build", "--preset", "release"], "options": { "cwd": "${workspaceFolder}" }, "dependsOn": "native-configure", "problemMatcher": "$msCompile" },
+    { "label": "native-test", "type": "process", "command": "ctest", "args": ["--preset", "release"], "options": { "cwd": "${workspaceFolder}" }, "dependsOn": "native-release", "problemMatcher": [] },
+    { "label": "legacy-csharp-build", "type": "process", "command": "dotnet", "args": ["build", "legacy/csharp/GrandmaMeijin.csproj"], "problemMatcher": "$msCompile" },
+    { "label": "legacy-csharp-run", "type": "process", "command": "dotnet", "args": ["run", "--project", "legacy/csharp/GrandmaMeijin.csproj"], "problemMatcher": "$msCompile" },
+    { "label": "legacy-csharp-publish", "type": "process", "command": "dotnet", "args": ["publish", "legacy/csharp/GrandmaMeijin.csproj", "-c", "Release", "-p:PublishProfile=WinX64"], "problemMatcher": "$msCompile" }
   ]
 }

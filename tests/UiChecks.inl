@@ -42,7 +42,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         SaveClick(directory, {101, 37});
         SaveHotkey(directory, {MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F11});
         std::atomic<int> down{}, up{};
-        App app(directory, [&](bool pressed) { if (pressed) ++down; else ++up; return true; });
+        std::atomic<bool> failDown{};
+        App app(directory, [&](bool pressed) { if (pressed) ++down; else ++up; return !(pressed && failDown); });
+        int notifications = 0;
+        bool popupSafe = true;
+        app.popup = [&](HWND owner, const wchar_t*) {
+            ++notifications;
+            popupSafe = popupSafe && !app.controller.Running() && app.notifying && up > 0;
+            SendMessageW(owner, WM_HOTKEY, app.registeredId, 0);
+            popupSafe = popupSafe && !app.controller.Running();
+        };
         app.instance = instance;
         HWND window = CreateDialogParamW(instance, MAKEINTRESOURCEW(IDD_MAIN), nullptr, MainProc, reinterpret_cast<LPARAM>(&app));
         check(window != nullptr, "native window created");
@@ -60,7 +69,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         check(!app.Register({MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F10}) && app.hotkey == previous && app.registeredId != 0,
             "failed registration preserves previous hotkey");
         UnregisterHotKey(blocker, 99); DestroyWindow(blocker);
-        app.Text(IDC_NOTICE, L"");
+        check(notifications == 1 && popupSafe, "registration failure notifies after release and blocks restart");
+        const auto goodDirectory = app.directory;
+        const auto blockedPath = directory / L"not-a-directory";
+        { std::ofstream blocked(blockedPath); blocked << "test"; }
+        app.directory = blockedPath;
+        SetDlgItemTextW(window, IDC_PERIOD, L"61");
+        SetDlgItemTextW(window, IDC_PERIOD, L"62");
+        check(notifications == 2 && popupSafe, "repeated timing save failure notifies once");
+        app.directory = goodDirectory;
+        app.SaveTiming();
+        app.directory = blockedPath;
+        app.SaveTiming();
+        check(notifications == 3, "save recovery resets notification suppression");
+        app.SaveHotkeySetting(); app.SaveHotkeySetting();
+        check(notifications == 4, "hotkey save failure notifies once independently");
+        app.directory = goodDirectory;
+        app.SaveHotkeySetting();
+        SetDlgItemTextW(window, IDC_PERIOD, L"60");
+        std::filesystem::remove(blockedPath);
         // 非アクティブなウィンドウへWM_HOTKEYを配送し、ボタンと同じ状態を操作することを確認。
         SendMessageW(window, WM_HOTKEY, app.registeredId, 0);
         Sleep(120);
@@ -72,6 +99,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
             SendMessageW(window, WM_HOTKEY, app.registeredId, 0);
         }
         check(!app.controller.Running(), "rapid UI hotkey toggles stop safely");
+        const int beforeFailure = notifications;
+        failDown = true;
+        app.Toggle();
+        for (int i = 0; i < 100 && app.controller.Running(); ++i) Sleep(5);
+        MSG pending{};
+        while (PeekMessageW(&pending, window, FinishedMessage, FinishedMessage, PM_REMOVE)) DispatchMessageW(&pending);
+        check(notifications == beforeFailure + 1 && popupSafe && !app.controller.Running(), "worker failure notifies after stopping");
+        app.ReportRunError();
+        check(notifications == beforeFailure + 1, "same worker error not repeated");
+        failDown = false;
         Capture(window, L"native-main.bmp");
         Hotkey value = previous;
         HWND dialog = CreateDialogParamW(instance, MAKEINTRESOURCEW(IDD_HOTKEY), window, HotkeyProc, reinterpret_cast<LPARAM>(&value));
