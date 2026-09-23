@@ -8,10 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon Condition="Exists('Assets/app.ico')">Assets/app.ico</ApplicationIcon>
+    <ApplicationIcon Condition="Exists('../../Assets/app.ico')">../../Assets/app.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup><Compile Remove="developer/**/*.cs" /></ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Assets/app.ico" LogicalName="GrandmaMeijin.AppIcon" Condition="Exists('Assets/app.ico')" />
+    <EmbeddedResource Include="../../Assets/app.ico" LogicalName="GrandmaMeijin.AppIcon" Condition="Exists('../../Assets/app.ico')" />
   </ItemGroup>
 </Project>
