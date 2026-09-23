@@ -1,6 +1,7 @@
 {
   "version": "0.2.0",
   "configurations": [
+    { "name": "GrandmaMeijin (C++)", "type": "cppvsdbg", "request": "launch", "preLaunchTask": "native-debug", "program": "${workspaceFolder}/artifacts/native/Debug/GrandmaMeijin.exe", "cwd": "${workspaceFolder}", "externalConsole": false },
     { "name": "GrandmaMeijin", "type": "coreclr", "request": "launch", "preLaunchTask": "build", "program": "${workspaceFolder}/bin/Debug/net10.0-windows/GrandmaMeijin.dll", "cwd": "${workspaceFolder}", "console": "internalConsole" }
   ]
 }

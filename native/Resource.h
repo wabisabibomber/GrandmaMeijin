@@ -1,0 +1,20 @@
+#pragma once
+#define IDD_MAIN 100
+#define IDD_HOTKEY 102
+#define IDC_STATUS 1000
+#define IDC_PERIOD 1001
+#define IDC_DUTY 1002
+#define IDC_TIMING 1003
+#define IDC_TOGGLE 1004
+#define IDC_HOTKEY_LABEL 1005
+#define IDC_CHANGE 1006
+#define IDC_NOTICE 1007
+#define IDC_SAVE_NOTICE 1008
+#define IDC_PERIOD_SPIN 1009
+#define IDC_DUTY_SPIN 1010
+#define IDC_CTRL 1011
+#define IDC_ALT 1012
+#define IDC_SHIFT 1013
+#define IDC_WIN 1014
+#define IDC_KEY 1015
+#define IDC_PREVIEW 1016
